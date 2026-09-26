@@ -27,7 +27,8 @@
     "error": {
       "cannot_connect": "Impossible de se connecter au routeur en SSH.",
       "invalid_auth": "Nom d'utilisateur ou mot de passe invalide.",
-      "unknown": "Erreur inattendue, consultez les journaux."
+      "unknown": "Erreur inattendue, consultez les journaux.",
+      "cli_timeout": "Connexion SSH réussie, mais la CLI du routeur ne répond pas. Le texte reçu est dans les journaux."
     },
     "abort": {
       "already_configured": "Ce routeur est déjà configuré.",

@@ -19,7 +19,7 @@ L'intégration est **en lecture seule** : elle n'exécute que des commandes
 | `sensor.er605_dernier_demarrage` | `show system-info` | Date du dernier redémarrage (uptime) |
 | `sensor.er605_firmware` | `show system-info` | Version du firmware |
 | `sensor.er605_version_materielle` | `show system-info` | Désactivé par défaut |
-| `device_tracker.omada_ssh_xx_xx_…` | `show arp` | Un tracker « à la maison / absent » par appareil |
+| `device_tracker.<nom_d_hote>` | `show arp` + `show dhcp server client-list` | Un tracker « à la maison / absent » par appareil, nommé d'après son nom d'hôte DHCP (sinon `omada_ssh_<mac>`) |
 
 Les noms exacts des entités dépendent de la langue de votre Home Assistant.
 
@@ -33,6 +33,9 @@ Les noms exacts des entités dépendent de la langue de votre Home Assistant.
   quelques minutes après son départ. Le délai « absent » est réglable
   (3 minutes par défaut). Les téléphones en veille peuvent disparaître du Wi-Fi :
   augmentez le délai si nécessaire.
+* **Noms d'hôte DHCP** : lus en mode `configure` (`show dhcp server client-list`).
+  Le format exact n'a pas encore été vérifié sur un vrai routeur. S'il ne peut
+  pas être lu, les trackers gardent leur nom basé sur l'adresse MAC.
 * **Ping** : le format de sortie de la commande `ping` de l'ER605 n'a pas encore
   été vérifié sur un vrai routeur. Si le routeur ne sait pas l'exécuter,
   les entités Internet deviennent simplement « indisponibles » et le reste
@@ -88,6 +91,12 @@ La session SSH est conservée entre deux mises à jour et rouverte
 automatiquement si elle est coupée.
 
 ## Dépannage
+
+* **« Impossible de se connecter au routeur en SSH »** : Home Assistant ne
+  joint pas le port 22 du routeur (mauvaise IP, autre réseau ou pare-feu).
+* **« Connexion SSH réussie, mais la CLI du routeur ne répond pas »** : le
+  texte reçu du routeur est écrit dans les journaux de Home Assistant.
+  Ouvrez un ticket en le joignant.
 
 Activez les journaux détaillés dans `configuration.yaml` :
 

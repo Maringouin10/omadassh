@@ -35,6 +35,7 @@ class OmadaData:
     router: RouterData
     boot_time: datetime | None
     lan_clients: dict[str, ArpEntry] = field(default_factory=dict)
+    hostnames: dict[str, str] = field(default_factory=dict)
     wan_entries: list[ArpEntry] = field(default_factory=list)
 
 
@@ -58,6 +59,8 @@ class OmadaCoordinator(DataUpdateCoordinator[OmadaData]):
         self.client = client
         # MAC -> last time it was seen in the ARP table.
         self.last_seen: dict[str, datetime] = {}
+        # MAC -> host name from the DHCP leases, kept after the lease expires.
+        self.hostnames: dict[str, str] = {}
         self._boot_time: datetime | None = None
 
     async def _async_update_data(self) -> OmadaData:
@@ -70,6 +73,10 @@ class OmadaCoordinator(DataUpdateCoordinator[OmadaData]):
             raise ConfigEntryAuthFailed(str(err)) from err
         except OmadaError as err:
             raise UpdateFailed(str(err)) from err
+
+        for lease in router.dhcp or ():
+            if lease.hostname:
+                self.hostnames[lease.mac] = lease.hostname
 
         now = dt_util.utcnow()
         lan: dict[str, ArpEntry] = {}
@@ -91,5 +98,9 @@ class OmadaCoordinator(DataUpdateCoordinator[OmadaData]):
                 self._boot_time = boot.replace(microsecond=0)
 
         return OmadaData(
-            router=router, boot_time=self._boot_time, lan_clients=lan, wan_entries=wan
+            router=router,
+            boot_time=self._boot_time,
+            lan_clients=lan,
+            hostnames=dict(self.hostnames),
+            wan_entries=wan,
         )

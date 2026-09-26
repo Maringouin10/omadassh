@@ -76,3 +76,30 @@ def test_ping_timeout():
     result = parsers.parse_ping(out)
     assert result.received == 0
     assert not result.success
+
+
+def test_dhcp_clients():
+    leases = parsers.parse_dhcp_clients(fixture("show_dhcp_client_list.txt"))
+    assert [lease.mac for lease in leases] == [
+        "70:b3:06:33:04:30",
+        "d8:3a:dd:c9:69:9b",
+        "00:22:4d:7a:ad:e2",
+    ]
+    assert leases[0].hostname == "iPhone-de-Marin"
+    assert leases[0].ip == "192.168.0.139"
+    assert leases[0].lease == "01:52:10"
+    assert not leases[0].reserved
+    assert leases[1].reserved
+    assert leases[2].hostname is None
+
+
+def test_dhcp_clients_space_aligned():
+    out = """Client Name : laptop
+MAC Address : 7C:2C:67:8E:52:5C
+IP Address  : 192.168.0.117
+Lease Time  : 1:00:00
+"""
+    (lease,) = parsers.parse_dhcp_clients(out)
+    assert lease.hostname == "laptop"
+    assert lease.mac == "7c:2c:67:8e:52:5c"
+    assert lease.ip == "192.168.0.117"

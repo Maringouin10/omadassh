@@ -16,22 +16,27 @@ import asyncssh
 
 from .parsers import (
     ArpEntry,
+    DhcpLease,
     PingResult,
     SystemInfo,
     parse_arp,
+    parse_dhcp_clients,
     parse_ping,
     parse_system_info,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
-_PROMPT = re.compile(r"(?:^|[\r\n])[^\r\n]*?([>#])[ \t]*$")
+_PROMPT = re.compile(r"(?:^|[\r\n])([^\r\n]*?[>#])[ \t]*$")
 _PAGER = re.compile(r"(--\s*more\s*--|press any key)", re.IGNORECASE)
 _ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 
 LOGIN_TIMEOUT = 20
 COMMAND_TIMEOUT = 20
 PING_TIMEOUT = 30
+
+# The CLI only treats a carriage return (the Enter key) as end of line.
+_ENTER = "\r"
 
 # Some TP-Link firmwares only offer this legacy key exchange; append it to the
 # defaults so modern algorithms are still preferred when available.
@@ -44,6 +49,10 @@ class OmadaError(Exception):
 
 class OmadaConnectionError(OmadaError):
     """The router could not be reached or the session broke."""
+
+
+class OmadaCliTimeoutError(OmadaConnectionError):
+    """Logged in, but the CLI never showed the expected prompt."""
 
 
 class OmadaAuthError(OmadaError):
@@ -61,6 +70,7 @@ class RouterData:
     system: SystemInfo
     arp: list[ArpEntry]
     ping: PingResult | None
+    dhcp: list[DhcpLease] | None = None
 
 
 class OmadaSSHClient:
@@ -81,6 +91,7 @@ class OmadaSSHClient:
         self._process: asyncssh.SSHClientProcess | None = None
         self._lock = asyncio.Lock()
         self._ping_broken = False
+        self._dhcp_broken = False
 
     async def _connect(self) -> None:
         try:
@@ -109,11 +120,15 @@ class OmadaSSHClient:
                 encoding="utf-8",
                 errors="replace",
             )
-            prompt = (await self._read_until_prompt(LOGIN_TIMEOUT))[1]
-            if prompt == ">":
+            _, prompt = await self._read_until_prompt(LOGIN_TIMEOUT)
+            if prompt.endswith(">"):
                 await self._send("enable")
                 _, prompt = await self._read_until_prompt(COMMAND_TIMEOUT)
-            if prompt != "#":
+            if prompt.endswith(")#"):
+                # Left in configuration mode by an earlier session.
+                await self._send("exit")
+                _, prompt = await self._read_until_prompt(COMMAND_TIMEOUT)
+            if not prompt.endswith("#"):
                 raise OmadaAuthError("Could not enter privileged mode (enable)")
         except BaseException:
             await self._close()
@@ -121,10 +136,10 @@ class OmadaSSHClient:
 
     async def _send(self, command: str) -> None:
         assert self._process is not None
-        self._process.stdin.write(command + "\n")
+        self._process.stdin.write(command + _ENTER)
 
     async def _read_until_prompt(self, timeout: float) -> tuple[str, str]:
-        """Read output until a `>` or `#` prompt. Return (output, prompt char)."""
+        """Read output until a `>` or `#` prompt. Return (output, prompt)."""
         assert self._process is not None
         buffer = ""
         loop = asyncio.get_running_loop()
@@ -132,16 +147,16 @@ class OmadaSSHClient:
         while True:
             remaining = deadline - loop.time()
             if remaining <= 0:
-                raise OmadaConnectionError(
-                    f"Timed out waiting for the CLI prompt, got: {buffer[-200:]!r}"
+                raise OmadaCliTimeoutError(
+                    f"Timed out waiting for the CLI prompt, got: {buffer[-300:]!r}"
                 )
             try:
                 chunk = await asyncio.wait_for(
                     self._process.stdout.read(4096), remaining
                 )
             except TimeoutError as err:
-                raise OmadaConnectionError(
-                    f"Timed out waiting for the CLI prompt, got: {buffer[-200:]!r}"
+                raise OmadaCliTimeoutError(
+                    f"Timed out waiting for the CLI prompt, got: {buffer[-300:]!r}"
                 ) from err
             except (OSError, asyncssh.Error) as err:
                 raise OmadaConnectionError(str(err)) from err
@@ -153,7 +168,7 @@ class OmadaSSHClient:
                 self._process.stdin.write(" ")
                 continue
             if match := _PROMPT.search(buffer):
-                return buffer[: match.start()], match.group(1)
+                return buffer[: match.start()], match.group(1).strip()
 
     async def _run(self, command: str, timeout: float = COMMAND_TIMEOUT) -> str:
         await self._send(command)
@@ -163,7 +178,7 @@ class OmadaSSHClient:
         if lines and lines[0].strip() == command:
             lines = lines[1:]
         text = "\n".join(lines).strip("\n")
-        if prompt != "#":
+        if not prompt.endswith("#"):
             raise OmadaCommandError(f"Left privileged mode after {command!r}")
         for line in lines:
             if line.strip().startswith("Error:"):
@@ -173,7 +188,7 @@ class OmadaSSHClient:
     async def _close(self) -> None:
         if self._process is not None:
             try:
-                self._process.stdin.write("exit\n")
+                self._process.stdin.write("exit" + _ENTER)
             except Exception:
                 pass
             self._process.close()
@@ -241,12 +256,48 @@ class OmadaSSHClient:
         _LOGGER.debug("Ping output: %r", output)
         return parse_ping(output)
 
+    async def async_dhcp_clients(self) -> list[DhcpLease] | None:
+        """Return the DHCP leases (with host names), or None when unavailable.
+
+        The lease list is only reachable from the configuration mode, whose
+        output was never seen on a real router, so any failure only disables
+        the host names instead of failing the update.
+        """
+        if self._dhcp_broken:
+            return None
+        async with self._lock:
+            try:
+                if self._process is None:
+                    await self._connect()
+                await self._run("configure")
+                try:
+                    output = await self._run("show dhcp server client-list")
+                finally:
+                    await self._run("exit")
+            except OmadaCommandError as err:
+                _LOGGER.warning("DHCP client list is not usable: %s", err)
+                self._dhcp_broken = True
+                await self._close()
+                return None
+            except OmadaConnectionError:
+                await self._close()
+                raise
+        _LOGGER.debug("DHCP client list output: %r", output)
+        leases = parse_dhcp_clients(output)
+        if not leases:
+            _LOGGER.warning("Could not parse the DHCP client list: %r", output[:500])
+            self._dhcp_broken = True
+            return None
+        return leases
+
     async def async_fetch(self, ping_target: str | None) -> RouterData:
         """Collect everything needed by the integration."""
         out = await self.async_run_commands(["show system-info", "show arp"])
+        dhcp = await self.async_dhcp_clients()
         ping = await self.async_ping(ping_target) if ping_target else None
         return RouterData(
             system=parse_system_info(out["show system-info"]),
             arp=parse_arp(out["show arp"]),
             ping=ping,
+            dhcp=dhcp,
         )

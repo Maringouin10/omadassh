@@ -26,6 +26,7 @@ from custom_components.omada_ssh.const import DOMAIN
 from custom_components.omada_ssh.parsers import (
     PingResult,
     parse_arp,
+    parse_dhcp_clients,
     parse_system_info,
 )
 
@@ -181,3 +182,23 @@ async def test_unload(hass: HomeAssistant, mock_client) -> None:
     entry = await _setup(hass)
     assert await hass.config_entries.async_unload(entry.entry_id)
     assert entry.state is config_entries.ConfigEntryState.NOT_LOADED
+
+
+async def test_tracker_uses_dhcp_hostname(hass: HomeAssistant, mock_client) -> None:
+    data = _router_data()
+    data.dhcp = parse_dhcp_clients(fixture("show_dhcp_client_list.txt"))
+    mock_client[0].return_value = data
+    await _setup(hass)
+
+    state = hass.states.get("device_tracker.iphone_de_marin")
+    assert state.state == "home"
+    assert state.attributes["host_name"] == "iPhone-de-Marin"
+    # No host name in the lease: falls back to the MAC address.
+    assert hass.states.get("device_tracker.omada_ssh_00_22_4d_7a_ad_e2")
+    clients = hass.states.get("sensor.er605_connected_clients").attributes["clients"]
+    assert {
+        "ip": "192.168.0.120",
+        "mac": "d8:3a:dd:c9:69:9b",
+        "hostname": "raspberrypi",
+        "interface": "vlan1",
+    } in clients

@@ -61,6 +61,17 @@ class ArpEntry:
 
 
 @dataclass
+class DhcpLease:
+    """One client of `show dhcp server client-list`."""
+
+    mac: str
+    ip: str | None = None
+    hostname: str | None = None
+    lease: str | None = None
+    reserved: bool = False
+
+
+@dataclass
 class PingResult:
     """Summary of a `ping` run."""
 
@@ -134,6 +145,62 @@ def parse_arp(output: str) -> list[ArpEntry]:
             )
         )
     return entries
+
+
+_MAC = re.compile(r"[0-9A-Fa-f]{2}(?:[-:][0-9A-Fa-f]{2}){5}")
+_IP = re.compile(r"\d{1,3}(?:\.\d{1,3}){3}")
+
+
+def parse_dhcp_clients(output: str) -> list[DhcpLease]:
+    """Parse `show dhcp server client-list`.
+
+    Each client is a block of `key: value` lines (client name, macaddr,
+    ipaddr, leasetime, bind). Keys are matched loosely because the exact
+    layout may vary between firmwares.
+    """
+    leases: list[DhcpLease] = []
+    current: dict[str, str] = {}
+
+    def flush() -> None:
+        mac = _MAC.search(current.get("mac", ""))
+        if mac:
+            ip = _IP.search(current.get("ip", ""))
+            name = current.get("name", "").strip()
+            leases.append(
+                DhcpLease(
+                    mac=normalize_mac(mac.group(0)),
+                    ip=ip.group(0) if ip else None,
+                    hostname=name if name and name not in ("-", "N/A", "*") else None,
+                    lease=current.get("lease") or None,
+                    reserved=current.get("bind", "").strip() in ("1", "yes", "on"),
+                )
+            )
+        current.clear()
+
+    for line in output.splitlines():
+        key, sep, value = line.partition(":")
+        if not sep:
+            continue
+        key = key.strip().lower()
+        value = value.strip()
+        if "name" in key:
+            field_name = "name"
+        elif "mac" in key:
+            field_name = "mac"
+        elif key.startswith("ip"):
+            field_name = "ip"
+        elif "lease" in key:
+            field_name = "lease"
+        elif "bind" in key:
+            field_name = "bind"
+        else:
+            continue
+        # A repeated field means a new client block started.
+        if field_name in current:
+            flush()
+        current[field_name] = value
+    flush()
+    return leases
 
 
 def parse_key_values(output: str) -> dict[str, str]:

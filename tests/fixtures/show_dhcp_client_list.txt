@@ -1,0 +1,17 @@
+client name:	iPhone-de-Marin
+macaddr:	70-B3-06-33-04-30
+ipaddr:	192.168.0.139
+leasetime:	01:52:10
+bind:	0
+
+client name:	raspberrypi
+macaddr:	D8-3A-DD-C9-69-9B
+ipaddr:	192.168.0.120
+leasetime:	01:10:04
+bind:	1
+
+client name:	
+macaddr:	00-22-4D-7A-AD-E2
+ipaddr:	192.168.0.148
+leasetime:	00:40:00
+bind:	0

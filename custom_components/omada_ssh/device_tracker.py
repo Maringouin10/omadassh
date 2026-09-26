@@ -64,8 +64,13 @@ class OmadaClientTracker(CoordinatorEntity[OmadaCoordinator], ScannerEntity):
 
     @property
     def name(self) -> str:
-        """Return a name until the user renames the entity."""
-        return f"{DOMAIN} {self._mac}"
+        """Return the DHCP host name, or the MAC address when unknown."""
+        return self.hostname or f"{DOMAIN} {self._mac}"
+
+    @property
+    def hostname(self) -> str | None:
+        """Return the host name announced to the DHCP server."""
+        return self.coordinator.hostnames.get(self._mac)
 
     @property
     def mac_address(self) -> str:

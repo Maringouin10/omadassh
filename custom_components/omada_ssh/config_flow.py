@@ -22,7 +22,12 @@ from homeassistant.const import (
 from homeassistant.core import callback
 import voluptuous as vol
 
-from .client import OmadaAuthError, OmadaError, OmadaSSHClient
+from .client import (
+    OmadaAuthError,
+    OmadaCliTimeoutError,
+    OmadaError,
+    OmadaSSHClient,
+)
 from .const import (
     CONF_CONSIDER_HOME,
     CONF_PING_TARGET,
@@ -51,8 +56,12 @@ async def _async_validate(data: Mapping[str, Any]) -> SystemInfo:
 
 
 def _errors_for(err: Exception) -> dict[str, str]:
+    if isinstance(err, OmadaError):
+        _LOGGER.warning("Connection test to the router failed: %s", err)
     if isinstance(err, OmadaAuthError):
         return {"base": "invalid_auth"}
+    if isinstance(err, OmadaCliTimeoutError):
+        return {"base": "cli_timeout"}
     if isinstance(err, OmadaError):
         return {"base": "cannot_connect"}
     _LOGGER.exception("Unexpected error")

@@ -27,7 +27,8 @@
     "error": {
       "cannot_connect": "Cannot connect to the router over SSH.",
       "invalid_auth": "Invalid username or password.",
-      "unknown": "Unexpected error, see the logs."
+      "unknown": "Unexpected error, see the logs.",
+      "cli_timeout": "Logged in over SSH, but the router CLI did not answer. See the logs for the received text."
     },
     "abort": {
       "already_configured": "This router is already configured.",

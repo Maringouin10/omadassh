@@ -57,7 +57,12 @@ SENSORS: tuple[OmadaSensorDescription, ...] = (
         value_fn=lambda data: len(data.lan_clients),
         attrs_fn=lambda data: {
             "clients": [
-                {"ip": c.ip, "mac": c.mac, "interface": c.interface}
+                {
+                    "ip": c.ip,
+                    "mac": c.mac,
+                    "hostname": data.hostnames.get(c.mac),
+                    "interface": c.interface,
+                }
                 for c in sorted(
                     data.lan_clients.values(),
                     key=lambda c: tuple(int(p) for p in c.ip.split(".")),

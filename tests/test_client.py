@@ -32,32 +32,51 @@ def _make_handler(ping_output):
         "show system-info": fixture("show_system_info.txt"),
         "show arp": fixture("show_arp.txt"),
     }
+    config_responses = {
+        "show dhcp server client-list": fixture("show_dhcp_client_list.txt"),
+    }
+
+    async def read_line(process):
+        """Read raw keystrokes; like the real CLI, only CR (Enter) ends a line."""
+        line = ""
+        while True:
+            char = await process.stdin.read(1)
+            if not char:
+                return None
+            if char == "\r":
+                return line
+            if char != "\n":
+                line += char
 
     async def handle(process):
-        privileged = False
+        mode = ">"
         process.stdout.write(BANNER + ">")
         while True:
-            line = await process.stdin.readline()
-            if not line:
+            cmd = await read_line(process)
+            if cmd is None:
                 break
-            cmd = line.strip()
+            cmd = cmd.strip()
             process.stdout.write(cmd + "\r\n")  # echo, like a real terminal
-            if cmd == "enable":
-                privileged = True
+            if cmd == "enable" and mode == ">":
+                mode = "#"
+            elif cmd == "configure" and mode == "#":
+                mode = "(config)#"
             elif cmd == "exit":
-                if not privileged:
+                if mode == ">":
                     break
-                privileged = False
-            elif privileged and cmd in responses:
+                mode = "#" if mode == "(config)#" else ">"
+            elif mode == "#" and cmd in responses:
                 process.stdout.write(responses[cmd].replace("\n", "\r\n"))
-            elif privileged and cmd.startswith("ping") and ping_output is not None:
+            elif mode == "(config)#" and cmd in config_responses:
+                process.stdout.write(config_responses[cmd].replace("\n", "\r\n"))
+            elif mode == "#" and cmd.startswith("ping") and ping_output is not None:
                 if ping_output == "hang":
                     await asyncio.sleep(3600)
                 process.stdout.write(ping_output.replace("\n", "\r\n") + "\r\n")
-            else:
-                word = cmd.split()[0] if cmd else ""
+            elif cmd:
+                word = cmd.split()[0]
                 process.stdout.write(f'Error: Invalid command "{word}"\r\n')
-            process.stdout.write("\r\n#" if privileged else "\r\n>")
+            process.stdout.write("\r\n" + mode)
         process.exit(0)
 
     return handle
@@ -74,6 +93,7 @@ async def server(request):
         server_host_keys=[key],
         process_factory=_make_handler(ping_output),
         encoding="utf-8",
+        line_editor=False,
     )
     port = srv.sockets[0].getsockname()[1]
     yield port
@@ -89,6 +109,10 @@ async def test_fetch(server):
         assert data.system.mac == "d4:d6:df:53:48:f3"
         assert len(data.arp) == 16
         assert data.ping is None
+        assert data.dhcp is not None
+        names = {lease.mac: lease.hostname for lease in data.dhcp}
+        assert names["70:b3:06:33:04:30"] == "iPhone-de-Marin"
+        assert names["00:22:4d:7a:ad:e2"] is None
         # The session is reused for the next poll.
         again = await c.async_fetch(None)
         assert len(again.arp) == 16
@@ -161,3 +185,13 @@ async def test_ping_hanging_is_disabled(server, monkeypatch):
         assert len(data.arp) == 16
     finally:
         await c.async_close()
+
+
+async def test_newline_is_not_enter(server, monkeypatch):
+    """Regression: the CLI ignores LF, commands must end with CR."""
+    monkeypatch.setattr(omada_client, "_ENTER", "\n")
+    monkeypatch.setattr(omada_client, "COMMAND_TIMEOUT", 0.5)
+    c = omada_client.OmadaSSHClient("127.0.0.1", server, USER, PASSWORD)
+    with pytest.raises(omada_client.OmadaCliTimeoutError):
+        await c.async_get_system_info()
+    await c.async_close()
