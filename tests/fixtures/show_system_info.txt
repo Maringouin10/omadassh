@@ -1,0 +1,8 @@
+System Description  - Omada Gigabit VPN Gateway
+System Name         - ER605
+Contact Information - www.omadanetworks.com
+Hardware Version    - ER605 v2.30
+Firmware Version    - 2.4.5 Build 20260721 Rel.81048
+Mac Address         - D4-D6-DF-53-48-F3
+System Time         - 2026-09-25 22:34:40
+Running Time        - 28 day - 5 hour - 12 min - 3 sec

@@ -1,0 +1,83 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Omada ER605 (SSH)",
+        "description": "Connexion à la CLI du routeur en SSH. Utilisez le même compte que l'interface web du routeur.",
+        "data": {
+          "host": "Hôte",
+          "port": "Port",
+          "username": "Nom d'utilisateur",
+          "password": "Mot de passe"
+        },
+        "data_description": {
+          "host": "Adresse IP du routeur, par exemple 192.168.0.1.",
+          "username": "Compte administrateur du routeur."
+        }
+      },
+      "reauth_confirm": {
+        "title": "Identifiants refusés par le routeur",
+        "description": "Saisissez à nouveau les identifiants SSH du routeur.",
+        "data": {
+          "username": "Nom d'utilisateur",
+          "password": "Mot de passe"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Impossible de se connecter au routeur en SSH.",
+      "invalid_auth": "Nom d'utilisateur ou mot de passe invalide.",
+      "unknown": "Erreur inattendue, consultez les journaux."
+    },
+    "abort": {
+      "already_configured": "Ce routeur est déjà configuré.",
+      "reauth_successful": "Identifiants mis à jour."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Options",
+        "data": {
+          "scan_interval": "Intervalle de mise à jour (secondes)",
+          "consider_home": "Délai avant qu'un appareil soit absent (secondes)",
+          "ping_target": "Cible du ping"
+        },
+        "data_description": {
+          "ping_target": "Adresse pinguée par le routeur pour vérifier la connexion Internet. Laisser vide pour désactiver.",
+          "consider_home": "Un appareil reste « à la maison » pendant ce délai après avoir disparu de la table ARP."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "last_boot": {
+        "name": "Dernier démarrage"
+      },
+      "firmware": {
+        "name": "Firmware"
+      },
+      "hardware": {
+        "name": "Version matérielle"
+      },
+      "connected_clients": {
+        "name": "Clients connectés"
+      },
+      "wan_gateway": {
+        "name": "Passerelle WAN"
+      },
+      "ping_latency": {
+        "name": "Latence Internet"
+      },
+      "ping_loss": {
+        "name": "Perte de paquets Internet"
+      }
+    },
+    "binary_sensor": {
+      "internet": {
+        "name": "Internet"
+      }
+    }
+  }
+}

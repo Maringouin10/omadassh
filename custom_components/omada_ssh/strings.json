@@ -1,0 +1,83 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Omada ER605 (SSH)",
+        "description": "Connect to the router CLI over SSH. Use the same account as the router web interface.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "username": "Username",
+          "password": "Password"
+        },
+        "data_description": {
+          "host": "IP address of the router, for example 192.168.0.1.",
+          "username": "Router administrator account."
+        }
+      },
+      "reauth_confirm": {
+        "title": "Router credentials refused",
+        "description": "Enter the router SSH credentials again.",
+        "data": {
+          "username": "Username",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to the router over SSH.",
+      "invalid_auth": "Invalid username or password.",
+      "unknown": "Unexpected error, see the logs."
+    },
+    "abort": {
+      "already_configured": "This router is already configured.",
+      "reauth_successful": "Credentials updated."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Options",
+        "data": {
+          "scan_interval": "Polling interval (seconds)",
+          "consider_home": "Delay before a client is away (seconds)",
+          "ping_target": "Ping target"
+        },
+        "data_description": {
+          "ping_target": "Address pinged by the router to check the Internet connection. Leave empty to disable.",
+          "consider_home": "A client stays home this long after it disappears from the ARP table."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "last_boot": {
+        "name": "Last boot"
+      },
+      "firmware": {
+        "name": "Firmware"
+      },
+      "hardware": {
+        "name": "Hardware version"
+      },
+      "connected_clients": {
+        "name": "Connected clients"
+      },
+      "wan_gateway": {
+        "name": "WAN gateway"
+      },
+      "ping_latency": {
+        "name": "Internet latency"
+      },
+      "ping_loss": {
+        "name": "Internet packet loss"
+      }
+    },
+    "binary_sensor": {
+      "internet": {
+        "name": "Internet"
+      }
+    }
+  }
+}
